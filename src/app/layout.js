@@ -2,7 +2,7 @@ import './globals.css';
 import Link from 'next/link';
 import { Inter } from 'next/font/google';
 import { LenisProvider } from '@/components/LenisProvider';
-import { Activity, Mail, ArrowUpRight } from 'lucide-react';
+import { Activity, Mail, FileText, ArrowUpRight } from 'lucide-react';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -67,8 +67,17 @@ export default function RootLayout({ children }) {
                     Full-Stack Developer passionate about building high-performance, accessible, and scalable web applications.
                   </p>
 
-                  {/* Professional Contact Action Links */}
+                  {/* Professional Contact Action Links with Resume */}
                   <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    <Link
+                      href="/resume"
+                      className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-xs sm:text-sm font-medium text-blue-400 transition-colors hover:border-blue-500/50 hover:bg-blue-500/20 hover:text-blue-300 focus-ring"
+                    >
+                      <FileText className="h-4 w-4" />
+                      <span>Resume (PDF)</span>
+                      <ArrowUpRight className="h-3.5 w-3.5 opacity-70" />
+                    </Link>
+
                     <a
                       href="mailto:sasikumarnallana956@gmail.com"
                       className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800/80 px-4 py-2 text-xs sm:text-sm font-medium text-slate-200 transition-colors hover:border-white/20 hover:bg-slate-700 hover:text-white focus-ring"

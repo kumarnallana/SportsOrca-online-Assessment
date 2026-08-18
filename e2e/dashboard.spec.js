@@ -16,8 +16,9 @@ test.describe('Subreddit Vibe Check Dashboard E2E', () => {
     
     // Developer Contact section in footer
     await expect(page.getByText('Contact Developer for Further Information About Project')).toBeVisible();
-    await expect(page.getByText('Nallana Sasi Kumar')).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: 'Nallana Sasi Kumar' })).toBeVisible();
     await expect(page.getByText('sasikumarnallana956@gmail.com')).toBeVisible();
+    await expect(page.getByRole('link', { name: /Resume/i })).toBeVisible();
   });
 
   test('executes subreddit search and renders vibe analytics and post list', async ({ page }) => {
@@ -66,5 +67,14 @@ test.describe('Subreddit Vibe Check Dashboard E2E', () => {
     await page.goBack();
     await expect(page).toHaveURL(/\/\?subreddit=technology/);
     await expect(page.getByText('Overall Vibe')).toBeVisible();
+  });
+
+  test('navigates to the interactive resume page and renders credentials', async ({ page }) => {
+    await page.goto('/resume');
+    await expect(page.getByRole('heading', { level: 1, name: 'NALLANA SASI KUMAR' })).toBeVisible();
+    await expect(page.getByText('Full-Stack Developer', { exact: true })).toBeVisible();
+    await expect(page.getByText('sasikumarnallana956@gmail.com').first()).toBeVisible();
+    await expect(page.getByText('Zylxy Technology Pvt. Ltd.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Print / Save as PDF' })).toBeVisible();
   });
 });
