@@ -2,6 +2,9 @@
 
 import { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
+import { TrendingUp, Minus, TrendingDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 
 export function SentimentOverview({ stats }) {
   const chartRef = useRef(null);
@@ -12,106 +15,149 @@ export function SentimentOverview({ stats }) {
     // Clear previous chart
     d3.select(chartRef.current).selectAll('*').remove();
 
-    const data = [
-      { label: 'Positive', value: stats.positivePercent, color: '#10b981' },
-      { label: 'Neutral', value: stats.neutralPercent, color: '#64748b' },
-      { label: 'Negative', value: stats.negativePercent, color: '#ef4444' }
-    ].filter(d => d.value > 0);
-
-    if (data.length === 0) return;
-
-    const width = 240;
-    const height = 240;
-    const margin = 10;
-    const radius = Math.min(width, height) / 2 - margin;
+    const width = chartRef.current.clientWidth;
+    const height = 40;
+    const margin = { left: 10, right: 10 };
 
     const svg = d3.select(chartRef.current)
       .append('svg')
-      .attr('viewBox', `0 0 ${width} ${height}`)
-      .attr('preserveAspectRatio', 'xMidYMid meet')
-      .append('g')
-      .attr('transform', `translate(${width / 2},${height / 2})`);
+      .attr('width', '100%')
+      .attr('height', height)
+      .style('overflow', 'visible');
 
-    const color = d3.scaleOrdinal()
-      .domain(data.map(d => d.label))
-      .range(data.map(d => d.color));
+    // AFINN scores practically fall between -3 and 3 for averages
+    const xScale = d3.scaleLinear()
+      .domain([-3, 3])
+      .range([margin.left, width - margin.right])
+      .clamp(true);
 
-    const pie = d3.pie()
-      .value(d => d.value)
-      .sort(null);
+    // Draw the background track (gradient)
+    const defs = svg.append('defs');
+    const linearGradient = defs.append('linearGradient')
+      .attr('id', 'vibe-gradient')
+      .attr('x1', '0%')
+      .attr('y1', '0%')
+      .attr('x2', '100%')
+      .attr('y2', '0%');
 
-    const arc = d3.arc()
-      .innerRadius(radius * 0.6)
-      .outerRadius(radius);
+    linearGradient.append('stop').attr('offset', '0%').attr('stop-color', '#ef4444'); // rose-500
+    linearGradient.append('stop').attr('offset', '50%').attr('stop-color', '#64748b'); // slate-500
+    linearGradient.append('stop').attr('offset', '100%').attr('stop-color', '#10b981'); // emerald-500
 
-    const arcs = svg.selectAll('arc')
-      .data(pie(data))
-      .enter()
-      .append('g')
-      .attr('class', 'arc');
+    svg.append('line')
+      .attr('x1', margin.left)
+      .attr('x2', width - margin.right)
+      .attr('y1', height / 2)
+      .attr('y2', height / 2)
+      .attr('stroke', 'url(#vibe-gradient)')
+      .attr('stroke-width', 4)
+      .attr('stroke-linecap', 'round')
+      .attr('opacity', 0.5);
 
-    arcs.append('path')
-      .attr('d', arc)
-      .attr('fill', d => color(d.data.label))
-      .attr('stroke', '#0f172a')
-      .style('stroke-width', '4px')
-      .transition()
+    // Draw the center tick
+    svg.append('line')
+      .attr('x1', xScale(0))
+      .attr('x2', xScale(0))
+      .attr('y1', height / 2 - 8)
+      .attr('y2', height / 2 + 8)
+      .attr('stroke', '#64748b')
+      .attr('stroke-width', 2)
+      .attr('stroke-linecap', 'round');
+
+    // Draw the indicator circle
+    const indicator = svg.append('circle')
+      .attr('cx', xScale(0)) // Start at center for animation
+      .attr('cy', height / 2)
+      .attr('r', 8)
+      .attr('fill', '#ffffff')
+      .attr('stroke', '#0f172a') // slate-900 border
+      .attr('stroke-width', 2);
+
+    // Animate to actual value
+    indicator.transition()
       .duration(1000)
-      .attrTween('d', function(d) {
-        const i = d3.interpolate(d.startAngle + 0.1, d.endAngle);
-        return function(t) {
-          d.endAngle = i(t);
-          return arc(d);
-        }
-      });
+      .ease(d3.easeCubicOut)
+      .attr('cx', xScale(stats.averageScore));
+
+    // Cleanup on unmount/resize
+    const handleResize = () => {
+      if (chartRef.current) {
+        const newWidth = chartRef.current.clientWidth;
+        xScale.range([margin.left, newWidth - margin.right]);
+        
+        svg.select('line').attr('x2', newWidth - margin.right);
+        svg.select('line:nth-child(3)').attr('x1', xScale(0)).attr('x2', xScale(0));
+        indicator.attr('cx', xScale(stats.averageScore));
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
 
   }, [stats]);
 
   if (!stats) return null;
 
   return (
-    <div className="rounded-xl border border-white/5 bg-zinc-900/50 p-6 shadow-sm backdrop-blur-sm mt-8 flex flex-col md:flex-row items-center justify-between">
-      <div className="w-full md:w-1/2">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold tracking-tight text-white mb-2">Sentiment Overview</h2>
-          <div className="inline-flex rounded-full bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-400 border border-blue-500/20">
-            Vibe: {stats.vibe}
-          </div>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      className="mt-8 grid gap-4 lg:grid-cols-3"
+    >
+      <div className="rounded-2xl border border-white/5 bg-slate-800/50 p-8 lg:col-span-2 flex flex-col justify-center">
+        <h2 className="text-sm font-semibold tracking-wide text-slate-400 uppercase">Overall Vibe</h2>
+        <div className="mt-2 flex items-baseline gap-3">
+          <h3 className="text-3xl font-bold tracking-tight text-white">{stats.vibe}</h3>
+          <span className="text-sm font-medium text-slate-300">
+            {stats.averageScore > 0 ? '+' : ''}{stats.averageScore.toFixed(2)} average
+          </span>
         </div>
+        
+        <div className="mt-8">
+          <div className="flex justify-between text-xs font-medium text-slate-400 mb-2">
+            <span>Negative</span>
+            <span>Mixed</span>
+            <span>Positive</span>
+          </div>
+          <div ref={chartRef} className="w-full h-[40px]"></div>
+        </div>
+      </div>
 
-        <div className="flex flex-col gap-4 text-sm text-zinc-400 mt-8 max-w-xs">
+      <div className="rounded-2xl border border-white/5 bg-slate-800/50 p-8 flex flex-col justify-center">
+        <h2 className="text-sm font-semibold tracking-wide text-slate-400 uppercase mb-6">Distribution</h2>
+        <div className="flex flex-col gap-5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-4 rounded-full bg-emerald-500" />
-              <span className="text-base text-zinc-300">Positive</span>
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                <TrendingUp className="h-4 w-4" />
+              </div>
+              <span className="font-medium text-slate-200">Positive</span>
             </div>
-            <span className="font-bold text-white text-base">{stats.positivePercent}%</span>
+            <span className="font-bold text-white text-lg">{stats.positivePercent}%</span>
           </div>
+          
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-4 rounded-full bg-slate-500" />
-              <span className="text-base text-zinc-300">Neutral</span>
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/10 text-slate-400">
+                <Minus className="h-4 w-4" />
+              </div>
+              <span className="font-medium text-slate-200">Neutral</span>
             </div>
-            <span className="font-bold text-white text-base">{stats.neutralPercent}%</span>
+            <span className="font-bold text-white text-lg">{stats.neutralPercent}%</span>
           </div>
+          
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-4 rounded-full bg-rose-500" />
-              <span className="text-base text-zinc-300">Negative</span>
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400">
+                <TrendingDown className="h-4 w-4" />
+              </div>
+              <span className="font-medium text-slate-200">Negative</span>
             </div>
-            <span className="font-bold text-white text-base">{stats.negativePercent}%</span>
+            <span className="font-bold text-white text-lg">{stats.negativePercent}%</span>
           </div>
         </div>
       </div>
-      
-      <div className="w-full md:w-1/2 flex justify-center mt-8 md:mt-0 relative">
-        <div ref={chartRef} className="w-64 h-64 relative drop-shadow-2xl"></div>
-        {/* Center label overlay */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-3xl font-bold text-white">{stats.total}</span>
-          <span className="text-xs text-zinc-400">Posts</span>
-        </div>
-      </div>
-    </div>
+    </motion.div>
   );
 }
