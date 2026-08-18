@@ -1,34 +1,50 @@
 "use client";
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TrendingUp, TrendingDown, Minus, BarChart2, Activity, Layers3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, useInView, useMotionValue, useSpring } from 'framer-motion';
 
 function AnimatedNumber({ value, isFloat = false }) {
   const ref = useRef(null);
-  const motionValue = useMotionValue(0);
-  const springValue = useSpring(motionValue, {
-    damping: 50,
-    stiffness: 100
-  });
-  const isInView = useInView(ref, { once: true, margin: "-20px" });
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mediaQuery.matches);
+  }, []);
+
+  const motionValue = useMotionValue(0);
+  const springValue = useSpring(motionValue, {
+    damping: 40,
+    stiffness: 120
+  });
+  const isInView = useInView(ref, { once: true, margin: "-10px" });
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      if (ref.current) {
+        ref.current.textContent = isFloat ? value.toFixed(2) : Math.round(value);
+      }
+      return;
+    }
+
     if (isInView) {
       motionValue.set(value);
     }
-  }, [isInView, value, motionValue]);
+  }, [isInView, value, motionValue, isFloat, prefersReducedMotion]);
 
   useEffect(() => {
+    if (prefersReducedMotion) return;
+
     return springValue.on("change", (latest) => {
       if (ref.current) {
         ref.current.textContent = isFloat ? latest.toFixed(2) : Math.round(latest);
       }
     });
-  }, [springValue, isFloat]);
+  }, [springValue, isFloat, prefersReducedMotion]);
 
-  return <span ref={ref}>{isFloat ? '0.00' : '0'}</span>;
+  return <span ref={ref}>{isFloat ? value.toFixed(2) : Math.round(value)}</span>;
 }
 
 export function StatsGrid({ stats }) {
@@ -71,10 +87,10 @@ export function StatsGrid({ stats }) {
       title: 'Avg Sentiment', 
       value: stats.averageScore, 
       isFloat: true,
-      subtext: 'score',
+      subtext: 'AFINN score',
       icon: Activity, 
-      color: 'text-indigo-400',
-      bg: 'bg-indigo-500/10'
+      color: 'text-blue-400',
+      bg: 'bg-blue-500/10'
     },
     { 
       title: 'Avg Reddit Score', 
@@ -86,48 +102,31 @@ export function StatsGrid({ stats }) {
     },
   ];
 
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05
-      }
-    }
-  };
-
-  const item = {
-    hidden: { opacity: 0, y: 15 },
-    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
-  };
-
   return (
-    <motion.div 
-      variants={container}
-      initial="hidden"
-      animate="show"
-      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-    >
+    <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
       {cards.map((card, i) => (
-        <motion.div key={i} variants={item} className="group relative overflow-hidden rounded-2xl border border-white/5 bg-slate-800/50 p-6 transition-all hover:border-white/10 hover:bg-slate-800/80">
+        <div 
+          key={i} 
+          className="group relative overflow-hidden rounded-2xl border border-white/5 bg-slate-800/50 p-5 transition-all duration-150 hover:border-white/10 hover:bg-slate-800/80"
+        >
           <div className="flex items-center gap-4">
-            <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", card.bg, card.color)}>
-              <card.icon className="h-6 w-6" />
+            <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", card.bg, card.color)} aria-hidden="true">
+              <card.icon className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-400">{card.title}</p>
+              <p className="text-xs font-medium text-slate-400">{card.title}</p>
               <div className="flex items-baseline gap-2 mt-0.5">
-                <p className="text-2xl font-bold tracking-tight text-white">
+                <p className="text-2xl font-bold font-mono tracking-tight text-white">
                   <AnimatedNumber value={card.value} isFloat={card.isFloat} />
                 </p>
                 {card.subtext && (
-                  <span className="text-sm font-medium text-slate-500">{card.subtext}</span>
+                  <span className="text-xs font-medium text-slate-400">{card.subtext}</span>
                 )}
               </div>
             </div>
           </div>
-        </motion.div>
+        </div>
       ))}
-    </motion.div>
+    </div>
   );
 }

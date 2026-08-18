@@ -7,54 +7,57 @@ import { SearchSection } from '@/components/SearchSection';
 import { StatsGrid } from '@/components/StatsGrid';
 import { SentimentOverview } from '@/components/SentimentOverview';
 import { PostList } from '@/components/PostList';
-import { AlertCircle, BarChart3 } from 'lucide-react';
+import { AlertCircle, BarChart3, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialSubreddit = searchParams.get('subreddit') || '';
+  const currentSubParam = searchParams.get('subreddit') || '';
 
-  const [subreddit, setSubreddit] = useState(initialSubreddit);
+  const [subreddit, setSubreddit] = useState(currentSubParam);
   
-  // Loading states
+  // Loading & stage state
   const [isFetching, setIsFetching] = useState(false);
   const [loadingStage, setLoadingStage] = useState('');
-  
   const [error, setError] = useState(null);
   
-  // Data state
+  // Data state (supports stale-while-revalidate UX)
   const [data, setData] = useState(null);
   const [staleData, setStaleData] = useState(null);
 
-  // Abort controller reference for stale request protection
+  // Abort controller reference for race condition protection
   const abortControllerRef = useRef(null);
+  const lastFetchedSubRef = useRef('');
 
-  // Trigger search if URL has initial param but no data
+  // Handle URL change (initial load or browser Back/Forward navigation)
   useEffect(() => {
-    if (initialSubreddit && !data && !isFetching) {
-      handleSearch(initialSubreddit);
+    if (currentSubParam && currentSubParam !== lastFetchedSubRef.current) {
+      handleSearch(currentSubParam, false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentSubParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSearch = async (sub) => {
+  const handleSearch = async (sub, updateUrl = true) => {
     if (!sub) return;
 
-    // Cancel any ongoing request
+    // Abort previous in-flight request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
 
-    // Update URL
-    router.push(`/?subreddit=${encodeURIComponent(sub)}`, { scroll: false });
-
+    lastFetchedSubRef.current = sub;
     setSubreddit(sub);
     setIsFetching(true);
-    setLoadingStage('Fetching subreddit data...');
+    setLoadingStage('Fetching subreddit posts...');
     setError(null);
+
+    // Update URL without scrolling
+    if (updateUrl) {
+      router.push(`/?subreddit=${encodeURIComponent(sub)}`, { scroll: false });
+    }
     
-    // Move current data to stale so it stays on screen
+    // Preserve current data as stale to prevent layout flashes
     if (data) {
       setStaleData(data);
       setData(null);
@@ -67,15 +70,15 @@ function DashboardContent() {
       const result = await response.json();
 
       if (!response.ok || result.error) {
-        throw new Error(result.message || 'Failed to fetch data.');
+        throw new Error(result.message || 'Failed to fetch subreddit data.');
       }
 
-      setLoadingStage('Analyzing conversation...');
+      setLoadingStage('Analyzing title sentiment...');
       
-      // Artificial short delay to allow the stage text to be readable
-      await new Promise(r => setTimeout(r, 250));
+      // Short delay for readable stage transitions
+      await new Promise(r => setTimeout(r, 180));
 
-      // Perform sentiment analysis client-side
+      // Sentiment analysis calculation
       const enrichedPosts = result.posts.map(post => ({
         ...post,
         sentiment: analyzeTitle(post.title)
@@ -83,8 +86,8 @@ function DashboardContent() {
 
       const stats = aggregateSentiment(enrichedPosts);
 
-      setLoadingStage('Preparing insights...');
-      await new Promise(r => setTimeout(r, 150));
+      setLoadingStage('Finalizing insights...');
+      await new Promise(r => setTimeout(r, 100));
 
       setData({
         subreddit: sub,
@@ -97,10 +100,9 @@ function DashboardContent() {
       setStaleData(null);
     } catch (err) {
       if (err.name === 'AbortError') {
-        console.log('Search aborted');
-        return;
+        return; // Ignored gracefully
       }
-      setError(err.message);
+      setError(err.message || 'An error occurred while analyzing the subreddit.');
       setStaleData(null);
     } finally {
       setIsFetching(false);
@@ -108,88 +110,102 @@ function DashboardContent() {
     }
   };
 
-  const hasNoData = !data && !staleData && !isFetching && !error;
+  const activeData = data || staleData;
+  const hasNoData = !activeData && !isFetching && !error;
 
   return (
-    <div className="container mx-auto px-4 py-12 md:px-8">
-      <SearchSection onSearch={handleSearch} initialValue={subreddit} isFetching={isFetching} />
+    <div className="container mx-auto px-4 py-10 md:px-8 max-w-5xl">
+      <SearchSection onSearch={(sub) => handleSearch(sub, true)} initialValue={subreddit} isFetching={isFetching} />
 
-      <div className="mx-auto mt-16 max-w-5xl">
-        <AnimatePresence mode="wait">
-          {hasNoData && (
-            <motion.div 
-              key="empty"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="flex flex-col items-center justify-center space-y-4 py-24 text-center"
-            >
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-800/50 border border-white/5 shadow-inner">
-                <BarChart3 className="h-8 w-8 text-slate-400" />
-              </div>
-              <div>
-                <h3 className="text-xl font-medium text-slate-200">No subreddit analyzed yet</h3>
-                <p className="mt-2 text-slate-400">Enter a subreddit above to begin analyzing the conversation.</p>
-              </div>
-            </motion.div>
-          )}
+      <div className="mt-14">
+        {/* Empty / Initial State */}
+        {hasNoData && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="flex flex-col items-center justify-center space-y-4 py-20 text-center rounded-2xl border border-white/5 bg-slate-800/20 p-8"
+          >
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-800/80 border border-white/5 shadow-inner" aria-hidden="true">
+              <BarChart3 className="h-8 w-8 text-slate-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-200">No Subreddit Analyzed Yet</h2>
+              <p className="mt-1.5 text-sm text-slate-400 max-w-md mx-auto">
+                Enter a subreddit name above or select one of the suggested tags to inspect conversation sentiment.
+              </p>
+            </div>
+          </motion.div>
+        )}
 
-          {error && (
-            <motion.div 
-              key="error"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-8 text-center"
+        {/* Error State */}
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.15 }}
+            className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-8 text-center"
+            role="alert"
+          >
+            <AlertCircle className="mx-auto mb-3 h-9 w-9 text-rose-400" />
+            <h2 className="text-base font-semibold text-rose-200">Analysis Failed</h2>
+            <p className="text-sm text-rose-300/80 mt-1 max-w-md mx-auto">{error}</p>
+            <button
+              onClick={() => handleSearch(subreddit, false)}
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-rose-500/20 border border-rose-500/30 px-4 py-2 text-xs font-medium text-rose-200 hover:bg-rose-500/30 transition-colors focus-ring"
             >
-              <AlertCircle className="mx-auto mb-3 h-10 w-10 text-rose-400" />
-              <h3 className="text-lg font-semibold text-rose-300">Something went wrong</h3>
-              <p className="text-rose-400/80 mt-1">{error}</p>
-            </motion.div>
-          )}
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Retry Search</span>
+            </button>
+          </motion.div>
+        )}
 
-          {(data || staleData) && (
-            <motion.div 
-              key="dashboard"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="relative"
-            >
-              {/* Stale Data Overlay */}
-              {staleData && isFetching && (
-                <div className="absolute inset-0 z-10 flex items-start justify-center pt-24 backdrop-blur-[2px] bg-slate-900/40 rounded-xl transition-all duration-300">
-                  <div className="flex items-center gap-3 rounded-full border border-blue-500/20 bg-blue-500/10 px-5 py-2.5 text-sm font-medium text-blue-400 shadow-xl backdrop-blur-md">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
-                    {loadingStage}
-                  </div>
+        {/* Dashboard Results Container */}
+        {activeData && (
+          <div className="relative">
+            {/* Stale Data Masking Overlay */}
+            {staleData && isFetching && (
+              <div 
+                className="absolute inset-0 z-20 flex items-start justify-center pt-24 backdrop-blur-[2px] bg-slate-900/40 rounded-2xl transition-opacity duration-200"
+                aria-live="polite"
+              >
+                <div className="flex items-center gap-3 rounded-full border border-blue-500/30 bg-slate-900/90 px-5 py-2.5 text-sm font-medium text-blue-400 shadow-2xl backdrop-blur-md">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+                  <span>{loadingStage}</span>
                 </div>
-              )}
-
-              <div className={staleData && isFetching ? 'opacity-50 grayscale-[30%] pointer-events-none transition-all duration-500' : 'transition-all duration-500'}>
-                {data?.count === 0 || staleData?.count === 0 ? (
-                  <div className="rounded-xl border border-white/5 bg-slate-800/50 p-12 text-center text-slate-300">
-                    <p>No valid posts found for this subreddit.</p>
-                  </div>
-                ) : (
-                  <>
-                    {(data?.source === 'mock' || staleData?.source === 'mock') && (
-                      <div className="mb-8 flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-400/90">
-                        <AlertCircle className="h-5 w-5 shrink-0" />
-                        <p>
-                          <strong className="font-semibold text-amber-400">Demo Mode Active:</strong> You are viewing synthetic mock data because official Reddit API credentials are not configured in the environment.
-                        </p>
-                      </div>
-                    )}
-                    
-                    <StatsGrid stats={data?.stats || staleData?.stats} />
-                    <SentimentOverview stats={data?.stats || staleData?.stats} />
-                    <PostList posts={data?.posts || staleData?.posts} />
-                  </>
-                )}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+
+            <div className={staleData && isFetching ? 'opacity-40 grayscale-[25%] pointer-events-none transition-all duration-300' : 'transition-all duration-300'}>
+              {activeData.count === 0 ? (
+                <div className="rounded-2xl border border-white/5 bg-slate-800/40 p-12 text-center text-slate-400">
+                  <p>No valid public posts found for r/{activeData.subreddit}.</p>
+                </div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  {/* Demo Mode Notice Banner */}
+                  {activeData.source === 'mock' && (
+                    <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs sm:text-sm text-amber-300/90">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                      <div>
+                        <strong className="font-semibold text-amber-300">Demo Mode Active: </strong>
+                        Rendering 50 synthetic posts for evaluation. To switch to live Reddit API data, add your developer keys to <code className="font-mono bg-amber-500/10 px-1 py-0.5 rounded text-amber-200">.env</code>.
+                      </div>
+                    </div>
+                  )}
+                  
+                  <StatsGrid stats={activeData.stats} />
+                  <SentimentOverview stats={activeData.stats} />
+                  <PostList posts={activeData.posts} />
+                </motion.div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -197,7 +213,7 @@ function DashboardContent() {
 
 export default function Dashboard() {
   return (
-    <Suspense fallback={<div className="h-screen w-full flex items-center justify-center text-slate-400">Loading...</div>}>
+    <Suspense fallback={<div className="h-96 w-full flex items-center justify-center text-slate-400">Loading dashboard...</div>}>
       <DashboardContent />
     </Suspense>
   );
