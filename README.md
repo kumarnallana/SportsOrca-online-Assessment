@@ -6,15 +6,16 @@ Understand the mood behind the hottest conversations on Reddit.
 This is a polished full-stack web application that fetches the hottest posts from a given subreddit, performs client-side sentiment analysis on their titles, and provides a beautiful dashboard summarizing the "vibe" of the community.
 
 ## Features
+- **Premium SaaS UI/UX:** Features a custom D3.js Linear Vibe Meter, smooth staggered Framer Motion entrances, layoutId filters, and a custom layered Slate dark theme.
 - **Official Reddit Integration:** Connects to Reddit using the official Data API (OAuth2 Client Credentials flow).
 - **Client-Side Sentiment Analysis:** Uses AFINN-based vocabulary to score the sentiment of titles securely on the client.
-- **Dynamic Dashboard:** D3.js powered donut chart, Framer Motion animations, and responsive layout.
-- **Filtering & Sorting:** Filter posts by sentiment label (Positive, Neutral, Negative) and sort by Reddit Score or Sentiment Score.
+- **Stale Data Protection:** Seamlessly transitions between subreddits using `AbortController` and stale-data caching to ensure honest loading states.
+- **Shareable URLs:** The application dynamically syncs state with the URL (`/?subreddit=reactjs`) for easily shareable analysis.
 - **Demo Mode:** Built-in synthetic data provider for local development without Reddit API credentials.
 
 ## Architecture
 ```text
-Browser (UI, Lenis Smooth Scroll, Framer Motion)
+Browser (UI, Lenis Smooth Scroll, Framer Motion, D3.js)
   ↓ HTTP GET /api/subreddit
 Next.js Route Handler (Validation, Provider Selection)
   ↓
@@ -24,7 +25,7 @@ Normalized Data
   ↓
 Client Sentiment Analysis (sentiment library)
   ↓
-Dashboard (D3 Charts, Aggregations, List)
+Dashboard (Animated Numbers, Aggregations, List)
 ```
 
 ## Tech Stack
@@ -52,17 +53,25 @@ Copy `.env.example` to `.env` and fill in your values.
 cp .env.example .env
 ```
 
-## Reddit Integration
-This application connects using the **OAuth2 Client Credentials** flow as mandated by the current 2026 Reddit Developer Policy.
-1. Go to `https://www.reddit.com/prefs/apps`.
-2. Register an application.
-3. Use the Client ID and Secret in your `.env`.
+## Reviewer Instructions: Reddit API Integration
+This application connects using the **OAuth2 Client Credentials** flow as mandated by the current 2026 Reddit Developer Policy. 
+**To fully evaluate the real-time efficiency and official API implementation of this application, please use your own official Reddit Developer API credentials.**
 
-**Note:** Reddit's unauthenticated JSON endpoints have been disabled. Live data strictly requires registered OAuth credentials.
+1. Go to `https://www.reddit.com/prefs/apps`.
+2. Register an application (script).
+3. Populate the following in your `.env` file:
+   ```env
+   REDDIT_CLIENT_ID=your_client_id
+   REDDIT_CLIENT_SECRET=your_client_secret
+   REDDIT_USER_AGENT=web:com.yourname.vibecheck:v1.0.0 (by /u/yourusername)
+   ```
+4. **Remove** `REDDIT_DATA_SOURCE=mock` from your `.env` file to disable Demo Mode.
+
+The application will automatically detect your credentials, bypass the mock data, and hit the live Reddit OAuth servers in real-time.
 
 ## Demo Mode
-Because Reddit API access requires approved credentials, a first-class **Demo Mode** is included.
-Set `REDDIT_DATA_SOURCE=mock` in your `.env` to test the UI and sentiment analysis engine against 50 realistic synthetic tech posts.
+Because Reddit API access requires approved credentials, a first-class **Demo Mode** is included for local UI testing.
+Set `REDDIT_DATA_SOURCE=mock` in your `.env` (or leave your keys blank) to test the UI and sentiment analysis engine against synthetic tech posts.
 
 ## Running Locally
 ```bash
@@ -74,20 +83,17 @@ Open `http://localhost:3000`.
 ```bash
 npm run lint
 npm run build
+npm run test:e2e  # Runs Playwright Automation Tests
 ```
 
-## Deployment
-This app is ready to be deployed to Vercel:
-1. Push to GitHub.
-2. Import project in Vercel.
-3. Configure Environment Variables (`REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, etc.).
-4. Deploy.
+## Playwright Automation
+This repository includes a basic end-to-end automation suite using **Playwright**. It verifies that the core search mechanics and rendering work across Chromium.
 
-## Project Structure
-- `src/app/api/subreddit`: Next.js Route Handler for proxying requests.
-- `src/lib/reddit`: Provider abstraction (mock vs api), normalization, and OAuth logic.
-- `src/lib/sentiment.js`: NLP and aggregation engine.
-- `src/components`: UI components (Search, PostList, SentimentOverview).
+To run the tests:
+```bash
+npx playwright install
+npx playwright test
+```
 
 ## Design Decisions
 1. **Server-Side API Proxy:** Prevents leaking API credentials to the browser and handles CORS safely.
@@ -98,8 +104,3 @@ This app is ready to be deployed to Vercel:
 ## Limitations
 - **Reddit API Restrictions:** True live mode requires an approved Reddit App registration per the Responsible Builder Policy.
 - **Sentiment Model:** AFINN is a simple lexicon-based model, so sarcasm or deeply context-dependent nuances might not be perfectly scored.
-
-## Future Improvements
-- Add timeframe filters (Hot, Top All Time).
-- Implement OAuth Authorization Code flow to fetch private user feeds.
-- Visualize sentiment trends over time.
