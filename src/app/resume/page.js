@@ -142,7 +142,17 @@ export default function ResumePage() {
               <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1">
                 <div>
                   <h3 className="text-base font-semibold text-white print:text-black">Web Developer Intern</h3>
-                  <p className="text-xs sm:text-sm text-blue-400 print:text-blue-700">Zylxy Technology Pvt. Ltd. (zylxytech.com)</p>
+                  <p className="text-xs sm:text-sm text-slate-300 print:text-slate-700">
+                    Zylxy Technology Pvt. Ltd.{' '}
+                    <a
+                      href="https://zylxytech.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors print:text-blue-700 inline-flex items-center gap-0.5"
+                    >
+                      (zylxytech.com)
+                    </a>
+                  </p>
                 </div>
                 <span className="text-xs font-mono text-slate-400 print:text-slate-600">May 2026 – Jul 2026 | Kakinada, AP</span>
               </div>
