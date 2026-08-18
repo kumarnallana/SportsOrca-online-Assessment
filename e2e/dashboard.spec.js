@@ -13,6 +13,11 @@ test.describe('Subreddit Vibe Check Dashboard E2E', () => {
     
     // Empty state container
     await expect(page.getByText('No Subreddit Analyzed Yet')).toBeVisible();
+    
+    // Developer Contact section in footer
+    await expect(page.getByText('Contact Developer for Further Information About Project')).toBeVisible();
+    await expect(page.getByText('Nallana Sasi Kumar')).toBeVisible();
+    await expect(page.getByText('sasikumarnallana956@gmail.com')).toBeVisible();
   });
 
   test('executes subreddit search and renders vibe analytics and post list', async ({ page }) => {
