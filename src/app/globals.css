@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --color-positive: #10b981;
+  --color-neutral: #64748b;
+  --color-negative: #ef4444;
+}
+
+@layer base {
+  body {
+    background-color: #0a0a0a;
+    color: #f4f4f5;
+  }
+}
